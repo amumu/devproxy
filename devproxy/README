@@ -24,3 +24,9 @@ That's the long and short of it.
 I used https://github.com/christopherhesse/go-socks-proxy-example
 as a starting point for developing this proxy. Very little of that
 code or functionality remains.
+
+Changelog:
+
+r294 -- bug fix: handle properly when clients offer more than one
+		authentication type. Previously those would overrun into
+		the request itself and push out other parameters...
