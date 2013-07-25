@@ -18,7 +18,6 @@ var verbose int
 var hostNameRewrite map[string]string
 
 type ConnectionRequestPartOneSocks5 struct {
-	Null1       uint8
 	Version     uint8
 	Command     uint8
 	Null2       uint8
@@ -169,6 +168,9 @@ func handleSocks5(client net.Conn) error {
 		return err
 	}
 	authMethods = make([]uint8, authMethodCount)
+	if err := binary.Read(client, binary.BigEndian, &authMethods); err != nil {
+		return err
+	}
 	for _, v := range authMethods {
 		if v == 0 {
 			authCanNoAuth = true
