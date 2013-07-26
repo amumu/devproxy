@@ -30,3 +30,8 @@ Changelog:
 r294 -- bug fix: handle properly when clients offer more than one
 		authentication type. Previously those would overrun into
 		the request itself and push out other parameters...
+r298 -- bug fix: handle resolving and using ipv6 addresses for CONNECT
+		bug fix: properly send responses to clients. Tested working
+		with phantomjs and --proxy-type=socks5. Tested working with
+		curl and -socks5-hostname. Tested working with chrome (osx)
+		and switchy (http://switchy.samabox.com/)
