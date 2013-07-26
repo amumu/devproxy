@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"flag"
@@ -29,8 +28,8 @@ type ConnectionRequestResponseSocks5 struct {
 	Status      uint8
 	Null        uint8
 	AddressType uint8
-	Address     []byte
-	Port        []byte
+	Address     [4]byte
+	Port        [2]byte
 }
 
 const (
@@ -58,28 +57,8 @@ func echoLoop(to_read net.Conn, to_write net.Conn, wg *sync.WaitGroup) {
 }
 
 func WriteConnectionResponseSocks5(client net.Conn, response ConnectionRequestResponseSocks5) error {
-	if err := binary.Write(client, binary.BigEndian, response.Version); err != nil {
-		log.Printf("binary.Write failed: %+v [%+t]", err, response.Version)
-		return err
-	}
-	if err := binary.Write(client, binary.BigEndian, response.Status); err != nil {
-		log.Printf("binary.Write failed: %+v [%+t]", err, response.Status)
-		return err
-	}
-	if err := binary.Write(client, binary.BigEndian, response.Null); err != nil {
-		log.Printf("binary.Write failed: %+v [%+t]", err, response.Null)
-		return err
-	}
-	if err := binary.Write(client, binary.BigEndian, response.AddressType); err != nil {
-		log.Printf("binary.Write failed: %+v [%+t]", err, response.AddressType)
-		return err
-	}
-	if err := binary.Write(client, binary.BigEndian, response.Address); err != nil {
-		log.Printf("binary.Write failed: %+v [%+t]", err, response.Address)
-		return err
-	}
-	if err := binary.Write(client, binary.BigEndian, response.Port); err != nil {
-		log.Printf("binary.Write failed: %+v [%+t]", err, response.Port)
+	if err := binary.Write(client, binary.BigEndian, response); err != nil {
+		log.Printf("binary.Write failed: %+v [%+t]", err, response)
 		return err
 	}
 	return nil
@@ -119,12 +98,18 @@ func resolveServerSocks5(client net.Conn, request ConnectionRequestPartOneSocks5
 			if err != nil {
 				return server_ip, address, dnsLength, port, err
 			}
+			if verbose >= 2 {
+				log.Printf( "Found IPS for %s: %+v", v, ips )
+			}
 			server_ip = ips[0]
 			rewritten = true
 		} else {
 			ips, err := net.LookupIP(string(address[0:]))
 			if err != nil {
 				return server_ip, address, dnsLength, port, err
+			}
+			if verbose >= 2 {
+				log.Printf( "Found IPS for %s: %+v", string(address[0:]), ips )
 			}
 			server_ip = ips[0]
 		}
@@ -160,8 +145,8 @@ func handleSocks5(client net.Conn) error {
 	var authMethodCount uint8
 	var authMethods []uint8
 	var authCanNoAuth bool
-	var address []byte
 	var server_ip net.IP
+	var server_addr string
 	var Err error
 	port := make([]byte, 2)
 	if err := binary.Read(client, binary.BigEndian, &authMethodCount); err != nil {
@@ -187,23 +172,22 @@ func handleSocks5(client net.Conn) error {
 	if err := binary.Read(client, binary.BigEndian, &request); err != nil {
 		return err
 	}
-	if server_ip, address, _, port, Err = resolveServerSocks5(client, request); Err != nil {
+	if server_ip, _, _, port, Err = resolveServerSocks5(client, request); Err != nil {
 		return Err
 	}
 
 	portInt := binary.BigEndian.Uint16(port)
-	server_addr := fmt.Sprintf("%s:%d", server_ip, portInt)
+	isV4 := server_ip.To4()
+	if isV4 != nil {
+		server_addr = fmt.Sprintf("%s:%d", server_ip, portInt)
+	} else {
+		server_addr = fmt.Sprintf("[%s]:%d", server_ip, portInt)
+	}
 
 	response := ConnectionRequestResponseSocks5{}
 	response.Version = 5
 	response.Status = 0
-	response.AddressType = request.AddressType
-	response_addr := bytes.Buffer{}
-	response_addr.WriteByte(byte(len(address)))
-	response_addr.Write(address)
-	response.Address = make([]byte, len(address)+1)
-	response.Address = response_addr.Bytes()
-	response.Port = port
+	response.AddressType = 1
 
 	server, err := net.DialTimeout("tcp", server_addr, CONNECT_TIMEOUT)
 	if err != nil {
